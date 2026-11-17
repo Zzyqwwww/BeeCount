@@ -238,6 +238,29 @@ class AppLinkService {
         } else {
           logger.warning('AppLink', 'auto-billing 未提供图片路径');
         }
+      } else if (action == 'region-billing') {
+        final amount = (data['amount']?.toString() ?? '').trim();
+        final note = data['note'] as String?;
+        if (amount.isNotEmpty) {
+          final params = <String, String>{
+            'amount': amount,
+            'type': 'expense',
+            'fallback': '1',
+            'silent': '1',
+            if (note != null && note.isNotEmpty) 'note': note,
+          };
+          final res = await _handleAddTransaction(params);
+          logger.info('AppLink', 'region-billing 结果: success=${res.success} msg=${res.message}');
+        } else {
+          logger.warning('AppLink', 'region-billing 缺少金额');
+        }
+        if (Platform.isIOS) {
+          try {
+            await _methodChannel.invokeMethod('notifyBillingComplete');
+          } catch (e) {
+            logger.warning('AppLink', '通知 Swift 完成信号失败: $e');
+          }
+        }
       } else {
         logger.warning('AppLink', '未知的 AppIntent action: $action');
       }
