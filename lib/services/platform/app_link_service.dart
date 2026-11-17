@@ -461,7 +461,20 @@ class AppLinkService {
           params['fallback'] == '1') {
         final cats = await repo.getTopLevelCategories(
             txParams.type == 'income' ? 'income' : 'expense');
-        if (cats.isNotEmpty) categoryId = cats.first.id;
+        if (cats.isNotEmpty) {
+          final guessed = _guessCategoryName(
+              txParams.note ?? '', txParams.type == 'income' ? 'income' : 'expense');
+          var chosen = cats.first;
+          if (guessed != null) {
+            for (final c in cats) {
+              if (c.name == guessed) {
+                chosen = c;
+                break;
+              }
+            }
+          }
+          categoryId = chosen.id;
+        }
       }
 
       // 解析账户（不存在则自动创建）
@@ -579,6 +592,31 @@ class AppLinkService {
       logger.warning('AppLink', 'auto-billing 未提供文本');
       return AppLinkResult.failure(_l10n.appLinkNoText);
     }
+  }
+
+  /// 按备注/商户关键词猜测分类名（仅用于 fallback 自动分类）
+  String? _guessCategoryName(String text, String kind) {
+    final t = text.trim();
+    if (t.isEmpty) return null;
+    final lower = t.toLowerCase();
+    final rules = <String, List<String>>{
+      '交通': ['打车', '出行', '地铁', '公交', '高铁', '火车', '加油', '停车', '滴滴', '出租', '航空', '机票', '车费'],
+      '餐饮': ['餐', '饭', '食', '味', '奶茶', '咖啡', '小吃', '火锅', '烧烤', '面', '粉', '外卖', '食堂', '饮'],
+      '购物': ['购物', '超市', '商场', '淘宝', '京东', '拼多多', '便利店', '日用品'],
+      '娱乐': ['电影', '游戏', 'ktv', '娱乐', '演出', '门票'],
+      '通讯': ['话费', '流量', '宽带', '通信', '移动', '联通', '电信'],
+      '水电': ['水费', '电费', '燃气', '水电', '物业'],
+      '医疗': ['医院', '药', '诊所', '医疗'],
+      '教育': ['学费', '培训', '教育'],
+      '住房': ['房租', '租金', '住房'],
+      '宠物': ['宠物'],
+    };
+    for (final entry in rules.entries) {
+      for (final kw in entry.value) {
+        if (lower.contains(kw)) return entry.key;
+      }
+    }
+    return null;
   }
 
   /// 根据名称查找分类ID
