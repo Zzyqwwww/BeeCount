@@ -240,14 +240,4 @@ enum RegionBillingOCR {
     }
 }
 
-@available(iOS 16.0, *)
-struct RegionBillingShortcuts: AppShortcutsProvider {
-    static var appShortcuts: [AppShortcut] {
-        AppShortcut(intent: RegionBillingAppIntent(), phrases: [
-            "区域截图记账",
-            "用\\(.applicationName)区域记账"
-        ])
-    }
-}
-
 #endif
