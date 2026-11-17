@@ -1,0 +1,69 @@
+# BeeCount（Flutter）→ 未签名 iOS ipa
+# 配置对齐官方仓库自己的 iOS CI（release.yml）：Flutter 3.27.3 / macos-latest / 最新 Xcode / --no-codesign / Payload 打包。
+# 放到你仓库的 .github/workflows/ 下，Actions 手动运行，下载 artifact。
+name: Build unsigned iOS IPA
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select latest Xcode
+        run: |
+          LATEST_XCODE=$(ls -d /Applications/Xcode*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$LATEST_XCODE" ]; then
+            echo "Selecting Xcode: $LATEST_XCODE"
+            sudo xcode-select -s "$LATEST_XCODE"
+          fi
+          xcodebuild -version
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.3'
+          channel: stable
+          cache: false
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: flutter pub get
+        run: flutter pub get
+
+      # 关键：--no-codesign 只构建、不签名，产物在 build/ios/iphoneos/Runner.app
+      - name: Build iOS (no codesign)
+        run: |
+          export CI_VERSION="manual"
+          export GIT_COMMIT="${{ github.sha }}"
+          export BUILD_TIME="${{ github.run_id }}"
+          flutter build ios --release --no-codesign \
+            --dart-define=CI_VERSION="$CI_VERSION" \
+            --dart-define=GIT_COMMIT="$GIT_COMMIT" \
+            --dart-define=BUILD_TIME="$BUILD_TIME"
+
+      - name: Package unsigned IPA
+        run: |
+          set -euo pipefail
+          APP_PATH="build/ios/iphoneos/Runner.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "Runner.app not found at $APP_PATH" >&2
+            ls -la build/ios/iphoneos || true
+            exit 1
+          fi
+          mkdir -p Payload
+          cp -R "$APP_PATH" Payload/
+          /usr/bin/zip -qry BeeCount-unsigned.ipa Payload
+          echo "IPA 大小:"; ls -lh BeeCount-unsigned.ipa
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BeeCount-unsigned
+          path: BeeCount-unsigned.ipa
+          if-no-files-found: error
