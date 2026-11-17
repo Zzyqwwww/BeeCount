@@ -404,16 +404,20 @@ class AppLinkService {
       }
       if (type != 'transfer') {
         final categoryName = params['category'];
+        final allowFallback = params['fallback'] == '1';
         if (categoryName == null || categoryName.isEmpty) {
-          logger.warning('AppLink', '已拦截:缺少分类');
-          return AppLinkResult.failure(_l10n.appLinkMissingCategory);
-        }
-        final matched = await _findCategoryId(
-            repo, categoryName, type == 'income' ? 'income' : 'expense');
-        if (matched == null) {
-          logger.warning('AppLink', '已拦截:分类「$categoryName」不存在');
-          return AppLinkResult.failure(
-              _l10n.appLinkCategoryNotFound(categoryName));
+          if (!allowFallback) {
+            logger.warning('AppLink', '已拦截:缺少分类');
+            return AppLinkResult.failure(_l10n.appLinkMissingCategory);
+          }
+        } else {
+          final matched = await _findCategoryId(
+              repo, categoryName, type == 'income' ? 'income' : 'expense');
+          if (matched == null && !allowFallback) {
+            logger.warning('AppLink', '已拦截:分类「$categoryName」不存在');
+            return AppLinkResult.failure(
+                _l10n.appLinkCategoryNotFound(categoryName));
+          }
         }
       }
 
@@ -428,6 +432,13 @@ class AppLinkService {
           txParams.category!,
           txParams.type == 'income' ? 'income' : 'expense',
         );
+      }
+      if (categoryId == null &&
+          txParams.type != 'transfer' &&
+          params['fallback'] == '1') {
+        final cats = await repo.getTopLevelCategories(
+            txParams.type == 'income' ? 'income' : 'expense');
+        if (cats.isNotEmpty) categoryId = cats.first.id;
       }
 
       // 解析账户（不存在则自动创建）
