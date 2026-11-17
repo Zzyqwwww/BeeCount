@@ -190,7 +190,7 @@ struct RegionBillingAppIntent: AppIntent {
             URLQueryItem(name: "silent", value: "1"),
             URLQueryItem(name: "note", value: note)
         ]
-        if let url = comps.url { UIApplication.shared.open(url) }
+        if let url = comps.url { await UIApplication.shared.open(url) }
         return .result()
     }
 }
