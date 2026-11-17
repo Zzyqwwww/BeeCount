@@ -229,12 +229,24 @@ enum RegionBillingOCR {
     }
 
     static func parseMerchant(_ text: String) -> String? {
-        for raw in text.split(separator: "\n").map(String.init) {
-            let t = raw.trimmingCharacters(in: .whitespaces)
-            if t.isEmpty { continue }
-            if t.contains("¥") || t.contains("￥") { continue }
-            if Double(t) != nil { continue }
-            if t.count <= 20 { return t }
+        let all = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+        let lines = all.filter { !$0.isEmpty }
+        var amountIndex = -1
+        if let re = try? NSRegularExpression(pattern: "^-?[¥￥]?\\s*[0-9]+\\.[0-9]{2}$") {
+            for (i, l) in lines.enumerated() {
+                let ns = l as NSString
+                if re.firstMatch(in: l, range: NSRange(location: 0, length: ns.length)) != nil { amountIndex = i; break }
+            }
+        }
+        if amountIndex > 0 {
+            let prev = lines[amountIndex - 1]
+            if prev.count <= 30 && !prev.contains("¥") && !prev.contains("￥") { return prev }
+        }
+        for l in lines {
+            if l.contains("¥") || l.contains("￥") { continue }
+            if Double(l) != nil { continue }
+            if l == "账单" || l == "账单详情" { continue }
+            if l.count <= 30 { return l }
         }
         return nil
     }
