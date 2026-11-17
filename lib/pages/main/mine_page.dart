@@ -17,7 +17,6 @@ import '../settings/data_management_page.dart';
 import '../settings/appearance_settings_page.dart';
 import '../settings/smart_billing_page.dart';
 import '../settings/automation_page.dart';
-import '../settings/about_page.dart';
 import '../report/annual_report_page.dart';
 import '../donation/donation_page.dart';
 
@@ -89,8 +88,6 @@ class MinePage extends ConsumerWidget {
                       highlight: true)
                 ]),
                 group(l.v4MineHelpGroup, [
-                  row(l.about, l.aboutDesc, 'Info',
-                      () => open(const AboutPage())),
                   row(l.mineHelp, l.mineHelpSubtitle, 'CircleHelp', () async {
                     if (kHelpCenterInApp) {
                       open(const HelpCenterPage());
