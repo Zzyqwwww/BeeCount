@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import Vision
 import ImageIO
 import UniformTypeIdentifiers
 
