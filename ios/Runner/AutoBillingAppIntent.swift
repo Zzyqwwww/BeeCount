@@ -165,7 +165,7 @@ struct AutoBillingShortcuts: AppShortcutsProvider {
 struct RegionBillingAppIntent: AppIntent {
     static var title: LocalizedStringResource = "区域截图记账"
     static var description: IntentDescription = IntentDescription("本地识别付款截图中的金额并记账（不联网）")
-    static var openAppWhenRun: Bool = true
+    static var openAppWhenRun: Bool = false
 
     @Parameter(title: "截图")
     var screenshot: IntentFile?
@@ -180,17 +180,17 @@ struct RegionBillingAppIntent: AppIntent {
         let text = RegionBillingOCR.recognize(cg)
         guard let amount = RegionBillingOCR.parseAmount(text) else { return .result() }
         let note = RegionBillingOCR.parseMerchant(text) ?? "付款"
-        var comps = URLComponents()
-        comps.scheme = "beecount"
-        comps.host = "add"
-        comps.queryItems = [
-            URLQueryItem(name: "amount", value: String(format: "%.2f", amount)),
-            URLQueryItem(name: "type", value: "expense"),
-            URLQueryItem(name: "fallback", value: "1"),
-            URLQueryItem(name: "silent", value: "1"),
-            URLQueryItem(name: "note", value: note)
+        let payload: [String: Any] = [
+            "action": "region-billing",
+            "amount": String(format: "%.2f", amount),
+            "note": note,
+            "type": "expense"
         ]
-        if let url = comps.url { await UIApplication.shared.open(url) }
+        if let data = try? JSONSerialization.data(withJSONObject: payload),
+           let json = String(data: data, encoding: .utf8) {
+            AppIntentsBridge.sendEvent(json)
+            await AppIntentsBridge.waitForBillingComplete()
+        }
         return .result()
     }
 }
