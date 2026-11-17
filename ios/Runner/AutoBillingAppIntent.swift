@@ -157,4 +157,96 @@ struct AutoBillingShortcuts: AppShortcutsProvider {
         )
     }
 }
+
+
+// MARK: - 区域截图记账（本地 Vision OCR，不走 AI）
+@available(iOS 16.0, *)
+struct RegionBillingAppIntent: AppIntent {
+    static var title: LocalizedStringResource = "区域截图记账"
+    static var description: IntentDescription = IntentDescription("本地识别付款截图中的金额并记账（不联网）")
+    static var openAppWhenRun: Bool = true
+
+    @Parameter(title: "截图")
+    var screenshot: IntentFile?
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        guard let file = screenshot else { return .result() }
+        var data: Data? = nil
+        if let url = file.fileURL { data = try? Data(contentsOf: url) }
+        if data == nil { data = file.data }
+        guard let d = data, let img = UIImage(data: d), let cg = img.cgImage else { return .result() }
+        let text = RegionBillingOCR.recognize(cg)
+        guard let amount = RegionBillingOCR.parseAmount(text) else { return .result() }
+        let note = RegionBillingOCR.parseMerchant(text) ?? "付款"
+        var comps = URLComponents()
+        comps.scheme = "beecount"
+        comps.host = "add"
+        comps.queryItems = [
+            URLQueryItem(name: "amount", value: String(format: "%.2f", amount)),
+            URLQueryItem(name: "type", value: "expense"),
+            URLQueryItem(name: "fallback", value: "1"),
+            URLQueryItem(name: "silent", value: "1"),
+            URLQueryItem(name: "note", value: note)
+        ]
+        if let url = comps.url { UIApplication.shared.open(url) }
+        return .result()
+    }
+}
+
+@available(iOS 16.0, *)
+enum RegionBillingOCR {
+    static func recognize(_ cg: CGImage) -> String {
+        let req = VNRecognizeTextRequest()
+        req.recognitionLevel = .accurate
+        req.recognitionLanguages = ["zh-Hans", "en-US"]
+        req.usesLanguageCorrection = false
+        // 归一化坐标(原点左下)：只识别屏幕上半部分、居中区域
+        req.regionOfInterest = CGRect(x: 0.04, y: 0.42, width: 0.92, height: 0.52)
+        let handler = VNImageRequestHandler(cgImage: cg, options: [:])
+        try? handler.perform([req])
+        let results = req.results ?? []
+        return results.compactMap { $0.topCandidates(1).first?.string }.joined(separator: "\n")
+    }
+
+    static func parseAmount(_ text: String) -> Double? {
+        let patterns = [
+            "[¥￥]\\s*([0-9]+(?:\\.[0-9]{1,2})?)",
+            "收款\\s*([0-9]+(?:\\.[0-9]{1,2})?)",
+            "([0-9]+\\.[0-9]{2})"
+        ]
+        for p in patterns {
+            if let re = try? NSRegularExpression(pattern: p) {
+                let ns = text as NSString
+                if let m = re.firstMatch(in: text, range: NSRange(location: 0, length: ns.length)), m.numberOfRanges > 1 {
+                    let s = ns.substring(with: m.range(at: 1))
+                    if let v = Double(s), v > 0 { return v }
+                }
+            }
+        }
+        return nil
+    }
+
+    static func parseMerchant(_ text: String) -> String? {
+        for raw in text.split(separator: "\n").map(String.init) {
+            let t = raw.trimmingCharacters(in: .whitespaces)
+            if t.isEmpty { continue }
+            if t.contains("¥") || t.contains("￥") { continue }
+            if Double(t) != nil { continue }
+            if t.count <= 20 { return t }
+        }
+        return nil
+    }
+}
+
+@available(iOS 16.0, *)
+struct RegionBillingShortcuts: AppShortcutsProvider {
+    static var appShortcuts: [AppShortcut] {
+        AppShortcut(intent: RegionBillingAppIntent(), phrases: [
+            "区域截图记账",
+            "用\\(.applicationName)区域记账"
+        ])
+    }
+}
+
 #endif
